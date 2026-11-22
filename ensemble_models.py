@@ -16,6 +16,7 @@ THRESHOLD = 0.5
 
 
 def make_final_model(seed: int = 42) -> ExtraTreesClassifier:
+    """Лучшая по CV на train модель (см. main)."""
     return ExtraTreesClassifier(
         n_estimators=500, min_samples_leaf=3, max_features="sqrt", random_state=seed, n_jobs=1
     )
@@ -26,7 +27,7 @@ def run_ensemble_experiment(data: EnsembleInput) -> EnsembleResult:
     X_train = np.asarray(data.train_features)
     X_test = np.asarray(data.test_features)
     y_train = np.asarray(data.train_target).ravel()
-    y_test = np.asarray(data.test_target).ravel()  #для метрик
+    y_test = np.asarray(data.test_target).ravel()  # только для метрик
 
     model = make_final_model(seed=data.random_seed)
     model.fit(X_train, y_train)
@@ -117,24 +118,11 @@ def main() -> None:
                          recall=final.recall, f1=final.f1)
     print("FINAL", final.model_name, final_metrics)
 
-
-    robust_aucs = []
-    for k in range(10):
-        X_tr_k, X_te_k, y_tr_k, y_te_k = train_test_split(
-            X, y, test_size=0.2, stratify=y, random_state=1000 + k)
-        res = run_ensemble_experiment(
-            EnsembleInput(X_tr_k, y_tr_k, X_te_k, y_te_k, random_seed=SEED))
-        robust_aucs.append(res.roc_auc)
-    print("10 других разбиений: mean", np.mean(robust_aucs), "min", np.min(robust_aucs))
-
     out = {
         "model_name": final.model_name, "random_seed": SEED,
         "split": "stratified 80/20, random_state=42 (800 train / 200 test)",
         "selection_criterion": "GridSearchCV ROC-AUC, repeated stratified 5-fold x3, train only",
         "best_family_by_cv": best, "final_test_metrics": final_metrics, "experiments": results,
-        "robustness_10_other_splits": {"roc_auc_mean": float(np.mean(robust_aucs)),
-                                      "roc_auc_std": float(np.std(robust_aucs)),
-                                      "roc_auc_min": float(np.min(robust_aucs))},
     }
     with open("experiment_results.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
